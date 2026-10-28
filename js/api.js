@@ -1,88 +1,45 @@
-const cities = {
-  lisbon: {
-    city: "Lisbon",
-    country: "Portugal",
-    temperature: 24,
-    condition: "Clear sky",
-    icon: "☀️",
-    wind: 14,
-    time: "10:42",
-    forecast: [
-      ["Mon", "☀️", 25, 18], ["Tue", "🌤️", 24, 17], ["Wed", "⛅", 22, 16],
-      ["Thu", "🌦️", 21, 15], ["Fri", "🌤️", 23, 16], ["Sat", "☀️", 26, 18], ["Sun", "☀️", 27, 19]
-    ]
-  },
-  london: {
-    city: "London",
-    country: "United Kingdom",
-    temperature: 17,
-    condition: "Light rain",
-    icon: "🌦️",
-    wind: 21,
-    time: "09:42",
-    forecast: [
-      ["Mon", "🌦️", 17, 11], ["Tue", "🌧️", 16, 10], ["Wed", "⛅", 18, 12],
-      ["Thu", "🌤️", 19, 13], ["Fri", "☁️", 17, 11], ["Sat", "🌦️", 16, 10], ["Sun", "⛅", 18, 12]
-    ]
-  },
-  tokyo: {
-    city: "Tokyo",
-    country: "Japan",
-    temperature: 29,
-    condition: "Partly cloudy",
-    icon: "🌤️",
-    wind: 9,
-    time: "18:42",
-    forecast: [
-      ["Mon", "🌤️", 29, 22], ["Tue", "☀️", 31, 23], ["Wed", "🌦️", 27, 21],
-      ["Thu", "⛅", 28, 22], ["Fri", "☀️", 30, 23], ["Sat", "🌤️", 29, 22], ["Sun", "🌦️", 26, 20]
-    ]
-  },
-  paris: {
-    city: "Paris",
-    country: "France",
-    temperature: 20,
-    condition: "Cloudy",
-    icon: "☁️",
-    wind: 12,
-    time: "10:42",
-    forecast: [
-      ["Mon", "☁️", 20, 14], ["Tue", "🌦️", 19, 13], ["Wed", "⛅", 21, 14],
-      ["Thu", "☀️", 23, 15], ["Fri", "🌤️", 22, 15], ["Sat", "☁️", 20, 14], ["Sun", "🌦️", 18, 13]
-    ]
-  },
-  "new york": {
-    city: "New York",
-    country: "United States",
-    temperature: 22,
-    condition: "Partly cloudy",
-    icon: "⛅",
-    wind: 16,
-    time: "04:42",
-    forecast: [
-      ["Mon", "⛅", 22, 16], ["Tue", "☀️", 25, 17], ["Wed", "🌦️", 21, 15],
-      ["Thu", "☁️", 19, 14], ["Fri", "🌤️", 23, 16], ["Sat", "☀️", 26, 18], ["Sun", "⛅", 24, 17]
-    ]
-  }
-};
+export async function fetchJson(url) {
+  let response;
 
-function wait(milliseconds = 350) {
-  return new Promise(resolve => window.setTimeout(resolve, milliseconds));
-}
-
-export async function getWeather(city = "Lisbon") {
-  await wait();
-  const key = city.trim().toLowerCase();
-  const weather = cities[key] || cities[Object.keys(cities).find(name => cities[name].city.toLowerCase() === key)];
-
-  if (!weather) {
-    throw new Error(`Weather data is not available for “${city}” yet.`);
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    throw new Error("Could not connect to Open-Meteo. Check your internet connection.");
   }
 
-  return structuredClone(weather);
+  if (!response.ok) {
+    throw new Error(`Open-Meteo request failed (${response.status} ${response.statusText}).`);
+  }
+
+  try {
+    return await response.json();
+  } catch (error) {
+    throw new Error("Open-Meteo returned an unreadable response.");
+  }
 }
 
-export async function getFavourites() {
-  await wait(200);
-  return [cities.lisbon, cities.london, cities.tokyo];
+export async function searchCity(name) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=5`;
+  const data = await fetchJson(url);
+
+  return (data.results ?? []).map(result => ({
+    city: result.name,
+    country: result.country ?? "",
+    latitude: result.latitude,
+    longitude: result.longitude,
+    timezone: result.timezone ?? "Local time",
+    admin1: result.admin1 ?? ""
+  }));
+}
+
+export async function getForecast(latitude, longitude) {
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    current: "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min",
+    timezone: "auto"
+  });
+
+  return fetchJson(`https://api.open-meteo.com/v1/forecast?${params}`);
 }
